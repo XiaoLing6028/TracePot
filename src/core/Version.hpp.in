@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string_view>
+
+namespace tracepot {
+
+inline constexpr std::string_view kApplicationName = "TracePot";
+inline constexpr std::string_view kApplicationVersion = "@PROJECT_VERSION@";
+
+}  // namespace tracepot
