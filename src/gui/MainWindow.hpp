@@ -70,7 +70,7 @@ private:
 
     void onProgress(int stage, double elapsed, qulonglong processes, qulonglong fileEvents, qulonglong networkEvents,
                     const QString& message);
-    void onSucceeded(ReportPtr report);
+    void onSucceeded(const ReportPtr& report);
     void onFailed(const QString& message, const QString& hint);
     void onThreadFinished();
 

@@ -26,7 +26,7 @@ std::string isoTimestampFromEpoch(double epoch)
     }
     std::tm tm{};
     ::gmtime_r(&seconds, &tm);
-    std::array<char, 40> buffer{};
+    std::array<char, 64> buffer{};
     std::snprintf(buffer.data(), buffer.size(), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ", tm.tm_year + 1900,
                   tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, millis);
     return buffer.data();

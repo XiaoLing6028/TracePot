@@ -313,7 +313,8 @@ void ResultsView::populate()
         row.sortKeys[6] = meta != nullptr ? QVariant::fromValue<qulonglong>(meta->size) : QVariant();
         QString details = QStringLiteral("<h3><code>%1</code></h3>").arg(esc(c.path));
         details += tr("<p><b>Observed</b> by comparing filesystem snapshots taken before and after execution.</p>");
-        details += QStringLiteral("<p>%1 %2</p>").arg(esc(std::string(enumName(c.kind))), aspects.join(QStringLiteral(", ")));
+        details += QStringLiteral("<p>%1 %2</p>")
+                       .arg(esc(std::string(enumName(c.kind))), aspects.join(QStringLiteral(", ")).toHtmlEscaped());
         if (c.before) {
             details += tr("<h4>Before</h4>") + metadataTable(*c.before);
         }
@@ -336,7 +337,7 @@ void ResultsView::populate()
     files_.model->setRows(std::move(rows));
 
     // ---- Processes
-    rows.clear();
+    rows = {};
     for (const auto& p : r.processes) {
         QString result;
         if (p.exitCode) {
@@ -386,7 +387,7 @@ void ResultsView::populate()
     processes_.model->setRows(std::move(rows));
 
     // ---- Events
-    rows.clear();
+    rows = {};
     for (const auto& e : r.events) {
         RecordTableModel::Row row;
         row.values = {relative(e.timestamp, origin),
@@ -412,7 +413,7 @@ void ResultsView::populate()
     events_.model->setRows(std::move(rows));
 
     // ---- Network
-    rows.clear();
+    rows = {};
     for (const auto& n : r.networkEvents) {
         QString destination = qs(n.hostname.empty() ? n.address : n.hostname);
         if (!n.hostname.empty() && !n.address.empty()) {
@@ -440,7 +441,7 @@ void ResultsView::populate()
     network_.model->setRows(std::move(rows));
 
     // ---- Persistence
-    rows.clear();
+    rows = {};
     for (const auto& f : r.persistence) {
         QStringList basis;
         for (const auto b : f.basis) {
@@ -452,13 +453,13 @@ void ResultsView::populate()
         row.details = tr("<h3><code>%1</code></h3><p><b>Inferred</b> classification (rule <code>%2</code>): %3.</p>"
                          "<p>Based on: %4.</p><p>A persistence-related location is not automatically malicious; "
                          "installers legitimately configure services and shells.</p>")
-                          .arg(esc(f.path), esc(f.ruleId), esc(f.description), basis.join(QStringLiteral(", ")));
+                          .arg(esc(f.path), esc(f.ruleId), esc(f.description), basis.join(QStringLiteral(", ")).toHtmlEscaped());
         rows.push_back(std::move(row));
     }
     persistence_.model->setRows(std::move(rows));
 
     // ---- Diagnostics
-    rows.clear();
+    rows = {};
     for (const auto& d : r.diagnostics) {
         RecordTableModel::Row row;
         row.values = {qs(std::string(enumName(d.severity))), qs(std::string(enumName(d.kind))), qs(d.code),

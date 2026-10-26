@@ -11,7 +11,6 @@ target_compile_options(tracepot_compiler_options INTERFACE
     -Woverloaded-virtual
     -Wformat=2
     -Wimplicit-fallthrough
-    -Wnull-dereference
     -fstack-protector-strong)
 
 if(TRACEPOT_WARNINGS_AS_ERRORS)

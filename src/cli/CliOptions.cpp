@@ -134,16 +134,16 @@ Result<Options> parseCommandLine(const std::vector<std::string>& args)
         } else if (arg == "--as-root") {
             config.user = SandboxUser::SimulatedRoot;
         } else if (arg == "--memory") {
-            TRACEPOT_TRY(n, number(arg, 1024 * 1024));
+            TRACEPOT_TRY(n, number(arg, 1024ULL * 1024));
             config.limits.memoryBytes = n.value() * MiB;
         } else if (arg == "--max-processes") {
             TRACEPOT_TRY(n, number(arg, 100000));
             config.limits.maxProcesses = static_cast<std::uint32_t>(n.value());
         } else if (arg == "--max-file-size") {
-            TRACEPOT_TRY(n, number(arg, 1024 * 1024));
+            TRACEPOT_TRY(n, number(arg, 1024ULL * 1024));
             config.limits.maxFileSizeBytes = n.value() * MiB;
         } else if (arg == "--max-disk") {
-            TRACEPOT_TRY(n, number(arg, 1024 * 1024));
+            TRACEPOT_TRY(n, number(arg, 1024ULL * 1024));
             config.limits.maxDiskBytes = n.value() * MiB;
         } else if (arg == "--persistence-pattern") {
             TRACEPOT_TRY(p, value(arg));

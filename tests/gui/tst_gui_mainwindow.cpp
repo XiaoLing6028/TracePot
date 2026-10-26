@@ -203,6 +203,37 @@ private slots:
         QCOMPARE(proxy->index(0, 6).data().toString(), QStringLiteral("12 B"));
     }
 
+    void untrustedTextIsNotRendered()
+    {
+        // A crafted report (or sample output) must be shown literally, never interpreted as HTML.
+        auto doc = test::readFile(test::fixturesDir() / "sample-report.json");
+        const std::string marker = "/home/tracepot/.bashrc";
+        doc.replace(doc.find(marker, doc.find("\"filesystemChanges\"")), marker.size(), "/work/<b>bold</b><img src=x>");
+        const std::string detail = "\"detail\": \"exited with status 0\"";
+        doc.replace(doc.find(detail), detail.size(), "\"detail\": \"<i>injected</i>\"");
+        const auto reason = doc.find("\"terminationReason\": \"exited\"");
+        doc.replace(reason, std::string("\"terminationReason\": \"exited\"").size(),
+                    "\"terminationReason\": \"launch-failed\"");
+        const QString path = tmp_.path() + QStringLiteral("/crafted.json");
+        test::writeFile(path.toStdString(), doc);
+
+        MainWindow window(nullptr, false);
+        QVERIFY(window.loadReportFile(path));
+        auto* results = window.resultsView();
+        QVERIFY(results->summaryBrowser()->toPlainText().contains(QStringLiteral("<i>injected</i>")));
+        QCOMPARE(results->fileModel()->index(0, 0).data().toString(), QStringLiteral("/work/<b>bold</b><img src=x>"));
+        auto* table = window.findChild<QTableView*>(QStringLiteral("fileTable"));
+        for (int row = 0; row < table->model()->rowCount(); ++row) {
+            if (table->model()->index(row, 0).data().toString().contains(QStringLiteral("<b>"))) {
+                table->selectRow(row);
+            }
+        }
+        auto* details = table->parentWidget()->findChild<QTextBrowser*>();
+        QVERIFY(details->toPlainText().contains(QStringLiteral("/work/<b>bold</b><img src=x>")));
+        QCOMPARE(child<QLabel>(window, "statusLabel")->textFormat(), Qt::PlainText);
+        QCOMPARE(child<QLabel>(window, "errorLabel")->textFormat(), Qt::PlainText);
+    }
+
     void presentsErrors()
     {
         MainWindow window(nullptr, false);

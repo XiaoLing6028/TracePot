@@ -250,6 +250,11 @@ void MainWindow::buildUi()
     errorLabel_->setStyleSheet(QStringLiteral("QLabel { color: palette(highlighted-text); background: #a01818; padding: 4px; }"));
     errorLabel_->setVisible(false);
     progressForm->addRow(errorLabel_);
+    // These labels can show text derived from the analyzed program (stderr, paths) or from a
+    // loaded report; never let Qt interpret it as rich text.
+    for (QLabel* label : {inputTypeLabel_, stageLabel_, elapsedLabel_, countsLabel_, statusLabel_, errorLabel_}) {
+        label->setTextFormat(Qt::PlainText);
+    }
     leftLayout->addWidget(progressGroup);
     leftLayout->addStretch(1);
     scroll->setWidget(left);
@@ -511,7 +516,7 @@ void MainWindow::onProgress(int stage, double /*elapsed*/, qulonglong processes,
     statusBar()->showMessage(message);
 }
 
-void MainWindow::onSucceeded(ReportPtr report)
+void MainWindow::onSucceeded(const ReportPtr& report)
 {
     results_->setReport(report);
     const auto& execution = report->execution;

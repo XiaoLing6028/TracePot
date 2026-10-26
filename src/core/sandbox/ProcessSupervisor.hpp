@@ -72,7 +72,7 @@ struct CapturedRun {
 
 // Runs a short-lived helper command (version probes, readiness checks) and captures its output.
 Result<CapturedRun> runAndCapture(const std::string& executable, const std::vector<std::string>& argv,
-                                  std::chrono::milliseconds timeout, std::size_t maxOutput = 256 * 1024);
+                                  std::chrono::milliseconds timeout, std::size_t maxOutput = 256ULL * 1024);
 
 // PIDs whose parent is `parent` (scans /proc).
 std::vector<pid_t> childProcesses(pid_t parent);

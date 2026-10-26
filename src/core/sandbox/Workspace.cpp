@@ -20,7 +20,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr std::uint64_t kMaxCopiedFileBytes = 1024 * 1024;
+constexpr std::uint64_t kMaxCopiedFileBytes = 1024ULL * 1024;
 
 // Host /etc entries copied into the sandbox. Only world-readable regular files (and symlinks,
 // copied as links) are taken, so files that hold secrets (shadow, sudoers, private keys, ...) are
@@ -52,8 +52,9 @@ void copyHostEntry(const fs::path& source, const fs::path& destination, int dept
     if (S_ISLNK(st.st_mode)) {
         std::error_code ec;
         const auto target = fs::read_symlink(source, ec);
-        if (!ec) {
-            ::symlink(target.c_str(), destination.c_str());
+        // Best effort: a link that cannot be copied is simply absent from the sandbox's /etc.
+        if (!ec && ::symlink(target.c_str(), destination.c_str()) != 0) {
+            return;
         }
         return;
     }

@@ -165,7 +165,7 @@ Result<SandboxRunResult> runSandbox(const SandboxRunOptions& options, const Canc
     auto lastDiskCheck = start;
     std::optional<Clock::time_point> killDeadline;
 
-    auto terminate = [&](TerminationReason reason, std::string detail, std::string limit) {
+    auto terminate = [&](TerminationReason reason, const std::string& detail, const std::string& limit) {
         if (result.forced) {
             return;
         }

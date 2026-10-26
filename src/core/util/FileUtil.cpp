@@ -235,8 +235,11 @@ void removeContents(int dirFd, int depth, RemovalState& state)
             }
             continue;
         }
-        // Restore owner access in case the analyzed code removed it.
-        ::fchmodat(dirFd, name.c_str(), 0700, 0);
+        // Restore owner access in case the analyzed code removed it. A failure here surfaces as an
+        // error when the directory is opened or removed below.
+        if (::fchmodat(dirFd, name.c_str(), 0700, 0) != 0) {
+            state.fail(name + ": " + errnoMessage(errno));
+        }
         if (depth >= kMaxRemovalDepth) {
             const std::string moved = ".tracepot-deep-" + std::to_string(state.counter++);
             if (::renameat(dirFd, name.c_str(), state.rootFd, moved.c_str()) == 0) {

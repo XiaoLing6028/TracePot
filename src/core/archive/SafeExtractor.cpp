@@ -168,7 +168,7 @@ Result<ExtractionResult> extractTarSafely(const fs::path& archivePath, const fs:
         if (static_cast<int>(components.size()) > limits.maxDepth) {
             return unsafe(member, "path is nested too deeply");
         }
-        const std::string leaf = components.back();
+        const std::string& leaf = components.back();
         const std::string parentRel = relPath.size() > leaf.size() ? relPath.substr(0, relPath.size() - leaf.size() - 1)
                                                                    : std::string();
 

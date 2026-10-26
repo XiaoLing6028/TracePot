@@ -21,7 +21,7 @@ struct TraceCollectorOptions {
     std::vector<std::string> entryArgv;
     std::string initialCwd = "/work";
     std::uint64_t maxEvents = 100000;
-    std::size_t maxLineBytes = 4 * 1024 * 1024;
+    std::size_t maxLineBytes = 4ULL * 1024 * 1024;
     std::size_t maxBufferedRecords = 50000;
     std::vector<std::string> sensitiveReadPatterns;  // globs on sandbox paths
     bool pidTranslationAvailable = true;

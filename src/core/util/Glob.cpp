@@ -64,9 +64,8 @@ bool globMatch(std::string_view pattern, std::string_view text)
             break;
         case TokenKind::Star:
             for (std::size_t j = 0; j <= m; ++j) {
-                if (dp[j]) {
-                    next[j] = 1;
-                } else if (j > 0 && next[j - 1] && text[j - 1] != '/') {
+                // Either the star matches nothing here, or it extends a match by one non-'/' char.
+                if (dp[j] || (j > 0 && next[j - 1] && text[j - 1] != '/')) {
                     next[j] = 1;
                 }
             }
