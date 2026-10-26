@@ -1,0 +1,9 @@
+# Build trees
+/build/
+/build-*/
+# Default CLI output directory
+tracepot-results/
+# Editor files
+*.user
+.vscode/
+.idea/

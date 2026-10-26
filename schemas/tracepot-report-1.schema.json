@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tracepot-report-1.schema.json",
+  "title": "TracePot analysis report",
+  "description": "Report schema version 1.x produced by TracePot. Minor versions only add optional fields; readers must ignore unknown fields. Missing values are explicit nulls. Paths are as seen inside the sandbox unless stated otherwise; bytes that are not valid UTF-8 and control characters are rendered as \\xNN / \\n escapes.",
+  "type": "object",
+  "required": [
+    "schema", "schemaVersion", "application", "analysisId", "disclaimer", "timing", "input", "sandbox",
+    "networkPolicy", "execution", "processes", "events", "filesystemChanges", "networkEvents", "persistence",
+    "resourceLimitEvents", "hostIntegrity", "statistics", "diagnostics"
+  ],
+  "properties": {
+    "schema": { "const": "tracepot-report" },
+    "schemaVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "application": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "TracePot" },
+        "version": { "type": "string" }
+      }
+    },
+    "analysisId": { "type": "string" },
+    "disclaimer": {
+      "type": "string",
+      "description": "TracePot never declares an input safe; this text explains the scope of the observations."
+    },
+    "timing": {
+      "type": "object",
+      "required": ["startedAt", "finishedAt", "durationSeconds"],
+      "properties": {
+        "startedAt": { "type": ["string", "null"], "format": "date-time" },
+        "finishedAt": { "type": ["string", "null"], "format": "date-time" },
+        "durationSeconds": { "type": "number" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["fileName", "sha256", "sizeBytes", "kind", "format", "interpreter", "entryPoint", "arguments", "environmentKeys", "archive"],
+      "properties": {
+        "fileName": { "type": "string" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["shell-script", "tar-archive", "unsupported"] },
+        "format": { "type": ["string", "null"] },
+        "interpreter": { "type": ["string", "null"] },
+        "entryPoint": { "type": ["string", "null"], "description": "Sandbox path of the executed script." },
+        "arguments": { "type": "array", "items": { "type": "string" } },
+        "environmentKeys": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of user-supplied environment variables. Values are never written to reports."
+        },
+        "archive": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["format", "entryCount", "totalBytes", "entries", "entriesTruncated"],
+              "properties": {
+                "format": { "type": "string" },
+                "entryCount": { "type": "integer", "minimum": 0 },
+                "totalBytes": { "type": "integer", "minimum": 0 },
+                "entriesTruncated": { "type": "boolean" },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["path", "type", "size", "mode", "linkTarget"],
+                    "properties": {
+                      "path": { "type": "string" },
+                      "type": { "$ref": "#/$defs/fileType" },
+                      "size": { "type": "integer", "minimum": 0 },
+                      "mode": { "$ref": "#/$defs/mode" },
+                      "linkTarget": { "type": ["string", "null"] }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "required": ["backend", "namespaces", "user", "sandboxUid", "seccomp", "readOnlyPaths", "writablePaths", "hostWritablePaths", "limits", "tracer", "runningAsHostRoot"],
+      "properties": {
+        "backend": { "type": "string" },
+        "backendVersion": { "type": ["string", "null"] },
+        "namespaces": { "type": "array", "items": { "type": "string" } },
+        "user": { "enum": ["unprivileged", "simulated-root"] },
+        "sandboxUid": { "type": "integer" },
+        "seccomp": {
+          "type": "object",
+          "required": ["enabled", "blocked"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "blocked": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "nestedUserNamespacesDisabled": { "type": "boolean" },
+        "readOnlyPaths": { "type": "array", "items": { "type": "string" } },
+        "writablePaths": { "type": "array", "items": { "type": "string" } },
+        "hostWritablePaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Host paths writable by the sandbox (all inside TracePot's private workspace)."
+        },
+        "limits": {
+          "type": "object",
+          "required": ["timeoutSeconds", "memoryBytes", "maxProcesses", "maxFileSizeBytes", "maxDiskBytes", "maxOpenFiles"],
+          "properties": {
+            "timeoutSeconds": { "type": "integer", "minimum": 1 },
+            "memoryBytes": { "type": "integer", "minimum": 0 },
+            "maxProcesses": { "type": "integer", "minimum": 0 },
+            "maxFileSizeBytes": { "type": "integer", "minimum": 0 },
+            "maxDiskBytes": { "type": "integer", "minimum": 0 },
+            "maxOpenFiles": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "limitNotes": { "type": "array", "items": { "type": "string" } },
+        "tracer": {
+          "type": "object",
+          "required": ["name", "version", "enabled"],
+          "properties": {
+            "name": { "type": ["string", "null"] },
+            "version": { "type": ["string", "null"] },
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "runningAsHostRoot": { "type": "boolean" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": ["mode", "description", "externalConnectivity", "dnsResolution", "observationMethod"],
+      "properties": {
+        "mode": { "type": "string" },
+        "description": { "type": "string" },
+        "externalConnectivity": { "type": "boolean" },
+        "dnsResolution": { "type": "boolean" },
+        "observationMethod": { "type": "string" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": ["terminationReason", "exitCode", "signal", "detail", "executionSeconds", "stdoutExcerpt", "stderrExcerpt", "stdoutBytes", "stderrBytes"],
+      "properties": {
+        "terminationReason": { "enum": ["not-started", "exited", "signaled", "timeout", "cancelled", "resource-limit", "launch-failed"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "executionSeconds": { "type": "number", "minimum": 0 },
+        "stdoutExcerpt": { "type": "string" },
+        "stderrExcerpt": { "type": "string" },
+        "stdoutBytes": { "type": "integer", "minimum": 0 },
+        "stderrBytes": { "type": "integer", "minimum": 0 },
+        "outputNote": { "type": "string" }
+      }
+    },
+    "processes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pid", "ppid", "startTime", "endTime", "executable", "execs", "exitCode", "signal", "terminatedAtTeardown", "threadCount"],
+        "properties": {
+          "pid": { "type": "integer", "description": "PID in the tracer's (host) PID namespace." },
+          "ppid": { "type": ["integer", "null"] },
+          "startTime": { "type": ["number", "null"], "description": "Seconds since the Unix epoch." },
+          "endTime": { "type": ["number", "null"] },
+          "executable": { "type": ["string", "null"] },
+          "execs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["timestamp", "path", "argv", "outcome", "error"],
+              "properties": {
+                "timestamp": { "type": "number" },
+                "path": { "type": "string" },
+                "argv": { "type": "array", "items": { "type": "string" } },
+                "outcome": { "$ref": "#/$defs/outcome" },
+                "error": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "exitCode": { "type": ["integer", "null"] },
+          "signal": { "type": ["string", "null"] },
+          "terminatedAtTeardown": { "type": "boolean" },
+          "threadCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seq", "timestamp", "pid", "type", "syscall", "path", "targetPath", "detail", "outcome", "error", "source", "evidence"],
+        "properties": {
+          "seq": { "type": "integer" },
+          "timestamp": { "type": "number" },
+          "pid": { "type": "integer" },
+          "type": {
+            "enum": ["process-spawn", "process-exec", "process-exit", "file-write", "file-delete", "file-rename", "directory-create",
+                     "directory-delete", "symlink-create", "hardlink-create", "permission-change", "ownership-change",
+                     "file-truncate", "sensitive-read", "network-connect", "network-bind", "network-listen", "network-send"]
+          },
+          "syscall": { "type": "string" },
+          "path": { "type": ["string", "null"] },
+          "targetPath": { "type": ["string", "null"] },
+          "detail": { "type": ["string", "null"] },
+          "outcome": { "$ref": "#/$defs/outcome" },
+          "error": { "type": ["string", "null"] },
+          "source": { "const": "syscall-trace" },
+          "evidence": { "const": "observed" }
+        }
+      }
+    },
+    "filesystemChanges": { "type": "array", "items": { "$ref": "#/$defs/fileChange" } },
+    "networkEvents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "pid", "kind", "protocol", "family", "address", "port", "hostname", "outcome", "error", "evidence", "source", "detail"],
+        "properties": {
+          "timestamp": { "type": ["number", "null"] },
+          "pid": { "type": ["integer", "null"] },
+          "kind": { "enum": ["dns-query", "connect", "datagram", "bind", "listen", "local-socket", "inferred-destination"] },
+          "protocol": { "type": ["string", "null"] },
+          "family": { "type": ["string", "null"] },
+          "address": { "type": ["string", "null"] },
+          "port": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+          "hostname": { "type": ["string", "null"] },
+          "outcome": { "$ref": "#/$defs/outcome" },
+          "error": { "type": ["string", "null"] },
+          "evidence": { "$ref": "#/$defs/evidence" },
+          "source": { "$ref": "#/$defs/source" },
+          "detail": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "persistence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "scope", "path", "action", "outcome", "ruleId", "description", "evidence", "basis", "pids"],
+        "properties": {
+          "category": {
+            "enum": ["shell-startup", "xdg-autostart", "systemd-unit", "cron", "sysv-init", "sudoers", "ssh-access",
+                     "dynamic-linker", "udev-rule", "pam", "kernel-module", "package-repository", "persistence-command", "custom"]
+          },
+          "scope": { "type": "string" },
+          "path": { "type": "string" },
+          "action": { "type": "string" },
+          "outcome": { "type": "string" },
+          "ruleId": { "type": "string" },
+          "description": { "type": "string" },
+          "evidence": { "const": "inferred" },
+          "basis": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+          "pids": { "type": "array", "items": { "type": "integer" } }
+        }
+      }
+    },
+    "resourceLimitEvents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "limit", "detail"],
+        "properties": {
+          "timestamp": { "type": ["number", "null"] },
+          "limit": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "hostIntegrity": {
+      "type": "object",
+      "required": ["performed", "pathsChecked", "entriesCompared", "changes", "note"],
+      "properties": {
+        "performed": { "type": "boolean" },
+        "pathsChecked": { "type": "array", "items": { "type": "string" }, "description": "Host paths (not sandbox paths)." },
+        "entriesCompared": { "type": "integer", "minimum": 0 },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/fileChange" } },
+        "note": { "type": "string" }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "properties": {
+        "traceLinesParsed": { "type": "integer" },
+        "traceLinesMalformed": { "type": "integer" },
+        "traceBytes": { "type": "integer" },
+        "eventsRecorded": { "type": "integer" },
+        "eventsDropped": { "type": "integer" },
+        "readOnlyOpens": { "type": "integer" },
+        "entriesBefore": { "type": "integer" },
+        "entriesAfter": { "type": "integer" },
+        "bytesHashed": { "type": "integer" }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "kind", "code", "message"],
+        "properties": {
+          "severity": { "enum": ["info", "warning", "error"] },
+          "kind": { "enum": ["limitation", "warning", "error", "note"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "mode": { "type": "string", "pattern": "^[0-7]{4}$", "description": "Octal permission bits including setuid/setgid/sticky." },
+    "fileType": { "enum": ["file", "directory", "symlink", "fifo", "socket", "char-device", "block-device", "unknown"] },
+    "outcome": { "enum": ["success", "failed", "unknown"] },
+    "evidence": { "enum": ["observed", "inferred", "missing", "error"] },
+    "source": { "enum": ["syscall-trace", "filesystem-diff", "sandbox-runtime", "host-integrity-check", "input-inspection", "command-line"] },
+    "fileMetadata": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["type", "mode", "uid", "gid", "size", "mtimeNs", "sha256", "hashNote", "linkTarget"],
+          "properties": {
+            "type": { "$ref": "#/$defs/fileType" },
+            "mode": { "$ref": "#/$defs/mode" },
+            "uid": { "type": "integer" },
+            "gid": { "type": "integer" },
+            "size": { "type": "integer", "minimum": 0 },
+            "mtimeNs": { "type": "integer" },
+            "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+            "hashNote": { "type": ["string", "null"] },
+            "linkTarget": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "fileChange": {
+      "type": "object",
+      "required": ["path", "change", "area", "aspects", "before", "after", "textDiff", "textDiffTruncated", "attributedPids", "notes", "source", "evidence"],
+      "properties": {
+        "path": { "type": "string" },
+        "change": { "enum": ["created", "deleted", "modified"] },
+        "area": { "type": "string" },
+        "aspects": {
+          "type": "array",
+          "items": { "enum": ["content", "size", "permissions", "ownership", "link-target", "type", "timestamps"] }
+        },
+        "before": { "$ref": "#/$defs/fileMetadata" },
+        "after": { "$ref": "#/$defs/fileMetadata" },
+        "textDiff": { "type": ["string", "null"] },
+        "textDiffTruncated": { "type": "boolean" },
+        "attributedPids": { "type": "array", "items": { "type": "integer" } },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "source": { "const": "filesystem-diff" },
+        "evidence": { "const": "observed" }
+      }
+    }
+  }
+}

