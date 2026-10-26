@@ -40,7 +40,7 @@ private slots:
     void classification()
     {
         QCOMPARE(classifyHeader("#!/bin/bash\n", "a").kind, InputKind::ShellScript);
-        const auto elf = classifyHeader(std::string("\x7f" "ELF\x02\x01\x01\0\0\0\0\0", 16), "installer.bin");
+        const auto elf = classifyHeader(std::string("\x7f" "ELF\x02\x01\x01", 7) + std::string(9, '\0'), "installer.bin");
         QCOMPARE(elf.kind, InputKind::Unsupported);
         QVERIFY(elf.reason.find("not execute binary installers") != std::string::npos);
         QCOMPARE(classifyHeader("PK\x03\x04rest", "a.zip").kind, InputKind::Unsupported);

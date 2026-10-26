@@ -10,6 +10,8 @@
 #include <csignal>
 
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 namespace tracepot {
@@ -29,6 +31,9 @@ constexpr std::string_view kTracedSyscalls =
 std::vector<std::string> helperArguments(const SandboxRunOptions& options)
 {
     std::vector<std::string> argv = {options.helperPath.string()};
+    if (!options.stracePath.empty()) {
+        argv.emplace_back("--require-tracer");
+    }
     const auto& limits = options.limits;
     if (limits.memoryBytes > 0) {
         argv.insert(argv.end(), {"--as", std::to_string(limits.memoryBytes)});
@@ -49,6 +54,21 @@ std::vector<std::string> helperArguments(const SandboxRunOptions& options)
     argv.emplace_back("--");
     argv.insert(argv.end(), options.plan.argv.begin(), options.plan.argv.end());
     return argv;
+}
+
+std::optional<std::uint64_t> freeBytes(const std::filesystem::path& path)
+{
+    struct statvfs vfs {};
+    if (::statvfs(path.c_str(), &vfs) != 0) {
+        return std::nullopt;
+    }
+    return static_cast<std::uint64_t>(vfs.f_bavail) * vfs.f_frsize;
+}
+
+std::uint64_t fileSize(int fd)
+{
+    struct stat st {};
+    return ::fstat(fd, &st) == 0 ? static_cast<std::uint64_t>(st.st_size) : 0;
 }
 
 class TraceTail {
@@ -129,6 +149,9 @@ Result<SandboxRunResult> runSandbox(const SandboxRunOptions& options, const Canc
 
     // Baseline usage so the disk limit applies to growth caused by the sample.
     const auto baseline = measureTree(options.paths.rootDir, options.maxTreeEntries);
+    // Safety net for growth the tree scan cannot see (e.g. beyond its depth limit): the drop in
+    // free space on the workspace filesystem, minus what TracePot itself wrote (trace, output).
+    const auto baselineFree = freeBytes(options.paths.rootDir);
 
     SandboxRunResult result;
     result.startEpoch = epochSeconds(std::chrono::system_clock::now());
@@ -205,6 +228,15 @@ Result<SandboxRunResult> runSandbox(const SandboxRunOptions& options, const Canc
                           "file-count");
             } else if (options.limits.maxDiskBytes > 0 && usage.bytes > baseline.bytes + options.limits.maxDiskBytes) {
                 terminate(TerminationReason::ResourceLimit, "disk usage growth exceeded the configured limit", "disk");
+            } else if (const auto freeNow = freeBytes(options.paths.rootDir);
+                       options.limits.maxDiskBytes > 0 && baselineFree && freeNow && *baselineFree > *freeNow) {
+                const std::uint64_t drop = *baselineFree - *freeNow;
+                const std::uint64_t accounted = result.traceBytes + fileSize(stdoutFd.get()) + fileSize(stderrFd.get());
+                const std::uint64_t slack = std::max<std::uint64_t>(64 * MiB, options.limits.maxDiskBytes / 4);
+                if (drop > accounted + options.limits.maxDiskBytes + slack) {
+                    terminate(TerminationReason::ResourceLimit,
+                              "free space on the workspace filesystem dropped by more than the disk limit", "disk");
+                }
             }
         }
         if (heartbeat) {

@@ -9,6 +9,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/random.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -139,12 +140,23 @@ Result<Workspace> Workspace::create(const fs::path& base, const std::string& ana
         return makeError(ErrorCode::Io, "cannot create workspace " + paths.runDir.string() + ": " + errnoMessage(errno));
     }
     ::chmod(paths.runDir.c_str(), 0700);
+    // The lock is taken under a temporary name and then renamed into place, so stale-workspace
+    // cleanup in another process can never observe an unlocked ".lock" for a live workspace.
+    const fs::path pendingLock = paths.runDir / ".lock.pending";
+    UniqueFd lock(::open(pendingLock.c_str(), O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
+    if (!lock || ::flock(lock.get(), LOCK_EX | LOCK_NB) != 0 ||
+        ::rename(pendingLock.c_str(), (paths.runDir / ".lock").c_str()) != 0) {
+        const int err = errno;
+        (void)removeTree(paths.runDir);
+        return makeError(ErrorCode::Io, "cannot lock workspace " + paths.runDir.string() + ": " + errnoMessage(err));
+    }
     paths.rootDir = paths.runDir / "root";
     paths.inputDir = paths.runDir / "input";
     paths.traceLog = paths.runDir / "trace" / "strace.log";
     paths.stdoutLog = paths.runDir / "output" / "stdout.log";
     paths.stderrLog = paths.runDir / "output" / "stderr.log";
     Workspace workspace(paths);
+    workspace.lock_ = std::move(lock);
     for (const auto& dir : {paths.rootDir, paths.inputDir, paths.runDir / "trace", paths.runDir / "output"}) {
         if (::mkdir(dir.c_str(), 0700) != 0) {
             return makeError(ErrorCode::Io, "cannot create " + dir.string() + ": " + errnoMessage(errno));
@@ -154,7 +166,7 @@ Result<Workspace> Workspace::create(const fs::path& base, const std::string& ana
 }
 
 Workspace::Workspace(Workspace&& other) noexcept
-    : paths_(std::move(other.paths_)), keep_(other.keep_), removed_(other.removed_)
+    : paths_(std::move(other.paths_)), lock_(std::move(other.lock_)), keep_(other.keep_), removed_(other.removed_)
 {
     other.removed_ = true;
 }
@@ -166,6 +178,7 @@ Workspace& Workspace::operator=(Workspace&& other) noexcept
             (void)remove();
         }
         paths_ = std::move(other.paths_);
+        lock_ = std::move(other.lock_);
         keep_ = other.keep_;
         removed_ = other.removed_;
         other.removed_ = true;
@@ -178,6 +191,40 @@ Workspace::~Workspace()
     if (!keep_ && !removed_) {
         (void)remove();
     }
+}
+
+void Workspace::setKeep(bool keep)
+{
+    keep_ = keep;
+    const auto marker = paths_.runDir / ".keep";
+    if (keep) {
+        (void)writeFileSecure(marker, "kept by request\n", 0600);
+    } else {
+        ::unlink(marker.c_str());
+    }
+}
+
+std::size_t Workspace::removeStale(const fs::path& base)
+{
+    std::size_t removed = 0;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(base, ec)) {
+        const std::string name = entry.path().filename().string();
+        if (name.rfind("tracepot-", 0) != 0 || !entry.is_directory(ec) || entry.is_symlink(ec)) {
+            continue;
+        }
+        if (fs::exists(entry.path() / ".keep", ec)) {
+            continue;
+        }
+        UniqueFd lock(::open((entry.path() / ".lock").c_str(), O_RDWR | O_NOFOLLOW | O_CLOEXEC));
+        if (!lock || ::flock(lock.get(), LOCK_EX | LOCK_NB) != 0) {
+            continue;  // in use by a running analysis (or not a TracePot workspace)
+        }
+        if (removeTree(entry.path())) {
+            ++removed;
+        }
+    }
+    return removed;
 }
 
 Status Workspace::remove()

@@ -180,24 +180,40 @@ Result<std::string> copyFileWithHash(const fs::path& source, const fs::path& des
 
 namespace {
 
+// Directories deeper than this are moved to the top of the tree before being emptied, so the
+// number of simultaneously open descriptors stays bounded however deep the tree is.
+constexpr int kMaxRemovalDepth = 32;
+
+struct RemovalState {
+    int rootFd = -1;
+    std::vector<std::string> deferred;  // top-level names of relocated deep subtrees
+    unsigned counter = 0;
+    std::string firstError;
+    bool ok = true;
+
+    void fail(const std::string& what)
+    {
+        ok = false;
+        if (firstError.empty()) {
+            firstError = what;
+        }
+    }
+};
+
 // Removes the contents of dirFd (an open directory) recursively. Never follows symlinks:
 // entries are opened relative to their parent with O_NOFOLLOW.
-bool removeContents(int dirFd, int depth, std::string& firstError)
+void removeContents(int dirFd, int depth, RemovalState& state)
 {
-    if (depth > 512) {
-        firstError = "directory nesting too deep";
-        return false;
-    }
     const int dupFd = ::dup(dirFd);
     if (dupFd < 0) {
-        firstError = errnoMessage(errno);
-        return false;
+        state.fail(errnoMessage(errno));
+        return;
     }
     DIR* dir = ::fdopendir(dupFd);
     if (dir == nullptr) {
         ::close(dupFd);
-        firstError = errnoMessage(errno);
-        return false;
+        state.fail(errnoMessage(errno));
+        return;
     }
     std::vector<std::string> names;
     while (struct dirent* entry = ::readdir(dir)) {
@@ -208,33 +224,36 @@ bool removeContents(int dirFd, int depth, std::string& firstError)
     }
     ::closedir(dir);
 
-    bool ok = true;
     for (const auto& name : names) {
         struct stat st {};
         if (::fstatat(dirFd, name.c_str(), &st, AT_SYMLINK_NOFOLLOW) != 0) {
             continue;
         }
-        if (S_ISDIR(st.st_mode)) {
-            // Restore owner access in case the analyzed code removed it.
-            ::fchmodat(dirFd, name.c_str(), 0700, 0);
-            UniqueFd child(::openat(dirFd, name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
-            if (child) {
-                ok = removeContents(child.get(), depth + 1, firstError) && ok;
+        if (!S_ISDIR(st.st_mode)) {
+            if (::unlinkat(dirFd, name.c_str(), 0) != 0 && errno != ENOENT) {
+                state.fail(name + ": " + errnoMessage(errno));
             }
-            if (::unlinkat(dirFd, name.c_str(), AT_REMOVEDIR) != 0 && errno != ENOENT) {
-                if (firstError.empty()) {
-                    firstError = name + ": " + errnoMessage(errno);
-                }
-                ok = false;
+            continue;
+        }
+        // Restore owner access in case the analyzed code removed it.
+        ::fchmodat(dirFd, name.c_str(), 0700, 0);
+        if (depth >= kMaxRemovalDepth) {
+            const std::string moved = ".tracepot-deep-" + std::to_string(state.counter++);
+            if (::renameat(dirFd, name.c_str(), state.rootFd, moved.c_str()) == 0) {
+                state.deferred.push_back(moved);
+            } else {
+                state.fail(name + ": " + errnoMessage(errno));
             }
-        } else if (::unlinkat(dirFd, name.c_str(), 0) != 0 && errno != ENOENT) {
-            if (firstError.empty()) {
-                firstError = name + ": " + errnoMessage(errno);
-            }
-            ok = false;
+            continue;
+        }
+        UniqueFd child(::openat(dirFd, name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (child) {
+            removeContents(child.get(), depth + 1, state);
+        }
+        if (::unlinkat(dirFd, name.c_str(), AT_REMOVEDIR) != 0 && errno != ENOENT) {
+            state.fail(name + ": " + errnoMessage(errno));
         }
     }
-    return ok;
 }
 
 }  // namespace
@@ -256,12 +275,25 @@ Status removeTree(const fs::path& path)
     if (!dirFd) {
         return makeError(ErrorCode::Io, "cannot open " + path.string() + ": " + errnoMessage(errno));
     }
-    std::string firstError;
-    const bool ok = removeContents(dirFd.get(), 0, firstError);
+    RemovalState state;
+    state.rootFd = dirFd.get();
+    removeContents(dirFd.get(), 0, state);
+    // Relocated deep subtrees are now shallow; each pass shortens the remaining depth.
+    while (!state.deferred.empty()) {
+        const std::string name = state.deferred.back();
+        state.deferred.pop_back();
+        UniqueFd child(::openat(dirFd.get(), name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (child) {
+            removeContents(child.get(), 1, state);
+        }
+        if (::unlinkat(dirFd.get(), name.c_str(), AT_REMOVEDIR) != 0 && errno != ENOENT) {
+            state.fail(name + ": " + errnoMessage(errno));
+        }
+    }
     dirFd.reset();
-    if (::rmdir(path.c_str()) != 0 || !ok) {
+    if (::rmdir(path.c_str()) != 0 || !state.ok) {
         return makeError(ErrorCode::Io, "cannot completely remove " + path.string() +
-                                            (firstError.empty() ? std::string() : ": " + firstError));
+                                            (state.firstError.empty() ? std::string() : ": " + state.firstError));
     }
     return {};
 }

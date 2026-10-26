@@ -726,7 +726,11 @@ void TraceCollector::onConnectOrBind(int tgid, const SyscallRecord& record)
     net.address = displaySafe(addr->address);
     net.port = addr->port;
     net.error = record.errnoName;
-    if (record.errnoName == "EINPROGRESS") {
+    // "success" is reserved for outcomes that mean what they say: an established TCP connection or
+    // a reachable local socket. A UDP connect() only associates an address and sends nothing, and a
+    // non-blocking connect() that returned EINPROGRESS did not complete while being observed.
+    const bool udpAssociation = connect && net.protocol == "udp" && record.succeeded();
+    if (record.errnoName == "EINPROGRESS" || udpAssociation) {
         net.outcome = Outcome::Unknown;
     } else {
         net.outcome = outcomeOf(record);
@@ -736,11 +740,11 @@ void TraceCollector::onConnectOrBind(int tgid, const SyscallRecord& record)
         net.detail = std::string(connect ? "connect to" : "bind") + " local socket";
     } else {
         net.kind = connect ? NetworkEventKind::Connect : NetworkEventKind::Bind;
-        if (net.outcome == Outcome::Success) {
+        if (udpAssociation) {
+            net.detail = "UDP socket associated with destination (no packet or response implied)";
+        } else if (net.outcome == Outcome::Success) {
             if (!connect) {
                 net.detail = "bound local address";
-            } else if (net.protocol == "udp") {
-                net.detail = "UDP socket associated with destination (no packet implied)";
             } else {
                 net.detail = "connection established (only loopback services inside the sandbox are reachable)";
             }
@@ -815,7 +819,8 @@ void TraceCollector::recordDatagram(int tgid, const SyscallRecord& record, const
             net.family = family;
             net.address = displaySafe(destination.address);
             net.port = 53;
-            net.outcome = outcomeOf(record);
+            // A successful send() only means the kernel accepted the packet; no answer was observed.
+            net.outcome = record.succeeded() ? Outcome::Unknown : outcomeOf(record);
             net.error = record.errnoName;
             return net;
         };
@@ -844,10 +849,10 @@ void TraceCollector::recordDatagram(int tgid, const SyscallRecord& record, const
     net.family = family;
     net.address = displaySafe(destination.address);
     net.port = destination.port;
-    net.outcome = outcomeOf(record);
+    net.outcome = record.succeeded() ? Outcome::Unknown : outcomeOf(record);
     net.error = record.errnoName;
-    net.detail = net.outcome == Outcome::Success ? "datagram handed to the kernel (delivery not observed)"
-                                                 : networkFailureDetail(record.errnoName);
+    net.detail = record.succeeded() ? "datagram handed to the kernel (delivery not observed)"
+                                    : networkFailureDetail(record.errnoName);
     addNetworkEvent(std::move(net));
 }
 
@@ -1007,6 +1012,17 @@ void TraceCollector::finish()
         warnings_.push_back("parent of process " + std::to_string(pid) + " could not be determined");
         adoptProcess(pid, std::nullopt, first);
     }
+
+    // Records of children can be processed after their parent's later records (they are buffered
+    // until the parent's clone() returns), so restore chronological order and renumber.
+    std::stable_sort(events_.begin(), events_.end(),
+                     [](const TraceEvent& a, const TraceEvent& b) { return a.timestamp < b.timestamp; });
+    for (std::size_t i = 0; i < events_.size(); ++i) {
+        events_[i].seq = i + 1;
+    }
+    std::stable_sort(networkEvents_.begin(), networkEvents_.end(), [](const NetworkEvent& a, const NetworkEvent& b) {
+        return a.timestamp.value_or(0) < b.timestamp.value_or(0);
+    });
 
     if (!entryPid_) {
         warnings_.emplace_back("the entry process was never observed in the trace");

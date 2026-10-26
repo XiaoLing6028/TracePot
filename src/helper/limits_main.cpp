@@ -2,9 +2,11 @@
 //
 // TracePot runs `strace ... -- tracepot-limits [limits] -- bwrap ...` so the limits apply to the
 // sandbox but not to strace itself (RLIMIT_FSIZE would otherwise truncate the trace log).
+// It also arms PR_SET_PDEATHSIG, which survives the exec into bubblewrap: if the tracer (or, without
+// tracing, TracePot itself) dies, the sandbox is killed instead of continuing untraced.
 // Usage:
 //   tracepot-limits [--as BYTES] [--fsize BYTES] [--nofile N] [--nproc-extra N] [--core BYTES]
-//                   [--keep-fd N]... -- /absolute/program [args...]
+//                   [--keep-fd N]... [--require-tracer] -- /absolute/program [args...]
 
 #include <cerrno>
 #include <cstdio>
@@ -16,6 +18,9 @@
 #include <string>
 #include <vector>
 
+#include <csignal>
+
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -75,6 +80,19 @@ unsigned long long countOwnProcesses()
     return count;
 }
 
+// PID of the process tracing us, or 0 when not traced.
+pid_t tracerPid()
+{
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.rfind("TracerPid:", 0) == 0) {
+            return static_cast<pid_t>(std::atol(line.c_str() + 10));
+        }
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -88,11 +106,16 @@ int main(int argc, char** argv)
     };
     std::vector<Pending> limits;
     unsigned long long nprocExtra = 0;
+    bool requireTracer = false;
     for (; index < argc; ++index) {
         const std::string arg = argv[index];
         if (arg == "--") {
             ++index;
             break;
+        }
+        if (arg == "--require-tracer") {
+            requireTracer = true;
+            continue;
         }
         if (index + 1 >= argc) {
             fail("missing value for " + arg);
@@ -117,11 +140,23 @@ int main(int argc, char** argv)
     if (index >= argc || argv[index][0] != '/') {
         fail("an absolute program path is required after --");
     }
+    // If our parent dies from now on, we (and, after exec, bubblewrap) receive SIGKILL. A parent that
+    // died *before* this point would never trigger it, so verify that the tracer is still attached
+    // and is our parent; strace's death only detaches tracees, it does not kill them.
+    if (::prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) {
+        fail("cannot set the parent-death signal");
+    }
+    if (requireTracer) {
+        const pid_t tracer = tracerPid();
+        if (tracer == 0 || tracer != ::getppid()) {
+            fail("the tracer is no longer attached; refusing to start an unobserved sandbox");
+        }
+    }
+
+    // Everything that allocates happens before the limits are applied: once RLIMIT_AS is set, a
+    // process whose address space already exceeds it (e.g. under AddressSanitizer) cannot map more.
     if (nprocExtra > 0) {
         limits.push_back({RLIMIT_NPROC, countOwnProcesses() + nprocExtra, "RLIMIT_NPROC"});
-    }
-    for (const auto& limit : limits) {
-        setLimit(limit.resource, limit.value, limit.name);
     }
 
     // Close every inherited descriptor except stdio and explicitly kept ones (e.g. the seccomp
@@ -136,6 +171,10 @@ int main(int argc, char** argv)
     }
     for (const int fd : open) {
         ::close(fd);
+    }
+
+    for (const auto& limit : limits) {
+        setLimit(limit.resource, limit.value, limit.name);
     }
     ::umask(022);
     ::execv(argv[index], &argv[index]);

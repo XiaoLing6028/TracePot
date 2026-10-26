@@ -383,6 +383,18 @@ private slots:
         QCOMPARE(QString::fromStdString(head->signal), QStringLiteral("SIGXFSZ"));
     }
 
+    void diskLimitEnforced()
+    {
+        const auto result = analyze(test::fixtureScript("disk_fill.sh"),
+                                    [](AnalysisConfig& c) { c.limits.maxDiskBytes = 4 * MiB; });
+        expectReport(result);
+        const auto& r = result.value();
+        QCOMPARE(r.execution.reason, TerminationReason::ResourceLimit);
+        QVERIFY(r.execution.executionSeconds < 20.0);  // stopped long before the fixture's sleep ends
+        QVERIFY(std::any_of(r.resourceLimitEvents.begin(), r.resourceLimitEvents.end(),
+                            [](const ResourceLimitEvent& e) { return e.limit == "disk"; }));
+    }
+
     void maliciousArchivesAreNeverExecuted()
     {
         const fs::path dir = inputs_.path().toStdString();

@@ -187,10 +187,10 @@ void MainWindow::buildUi()
                                       "installer behavior can be observed. Nothing is written to the host."));
     sandboxForm->addRow(simulateRootCheck_);
     const auto policy = IsolatedNetwork().describe();
-    networkPolicyLabel_ = new QLabel(tr("<b>%1</b>: %2")
-                                         .arg(QString::fromStdString(policy.mode).toHtmlEscaped(),
-                                              QString::fromStdString(policy.description).toHtmlEscaped()),
+    networkPolicyLabel_ = new QLabel(tr("<b>%1</b>: no external network (loopback only)")
+                                         .arg(QString::fromStdString(policy.mode).toHtmlEscaped()),
                                      sandboxGroup);
+    networkPolicyLabel_->setToolTip(QString::fromStdString(policy.description));
     networkPolicyLabel_->setObjectName(QStringLiteral("networkPolicyLabel"));
     networkPolicyLabel_->setWordWrap(true);
     sandboxForm->addRow(tr("Network policy:"), networkPolicyLabel_);

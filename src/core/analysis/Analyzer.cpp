@@ -213,6 +213,7 @@ Result<AnalysisReport> Analyzer::run(const CancellationToken& cancel, const Prog
     report.startedAt = isoTimestampUtc(analysisStart);
 
     const fs::path base = config_.workspaceBase.empty() ? tracepotCacheDir() / "runs" : config_.workspaceBase;
+    const std::size_t staleRemoved = Workspace::removeStale(base);
     auto workspaceResult = Workspace::create(base, report.analysisId);
     if (!workspaceResult) {
         return workspaceResult.error();
@@ -577,6 +578,11 @@ Result<AnalysisReport> Analyzer::run(const CancellationToken& cancel, const Prog
     stats.entriesAfter = after.entries.size();
     stats.bytesHashed = before.bytesHashed + after.bytesHashed;
 
+    if (staleRemoved > 0) {
+        d.push_back(diag(Severity::Info, DiagnosticKind::Note, "stale-workspaces",
+                         "Removed " + std::to_string(staleRemoved) +
+                             " workspace(s) left behind by interrupted earlier analyses."));
+    }
     if (config_.keepWorkspace) {
         d.push_back(diag(Severity::Info, DiagnosticKind::Note, "workspace-kept",
                          "Workspace kept at " + displaySafe(paths.runDir.string())));

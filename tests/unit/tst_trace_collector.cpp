@@ -117,6 +117,10 @@ private:
         QVERIFY(dns != nullptr);
         QVERIFY(dns->detail.find("AAAA") != std::string::npos);
         QCOMPARE(QString::fromStdString(dns->address), QStringLiteral("127.0.0.1"));
+        QCOMPARE(dns->outcome, Outcome::Unknown);  // sent, but no answer was observed
+        const auto* udp = findNet(NetworkEventKind::Connect, "127.0.0.1");
+        QVERIFY(udp != nullptr);
+        QCOMPARE(udp->outcome, Outcome::Unknown);  // a UDP connect() is not a connection
         QVERIFY(findNet(NetworkEventKind::DnsQuery, "test.invalid") != nullptr);  // via sendmmsg on a connected socket
         const auto* blocked = findNet(NetworkEventKind::Connect, "198.51.100.7");
         QVERIFY(blocked != nullptr);
@@ -130,6 +134,13 @@ private:
         QCOMPARE(*inferred->port, 8443);
         QVERIFY(inferred->detail.find("pw") == std::string::npos);  // credentials never reported
         QVERIFY(inferred->detail.find("[credentials]") != std::string::npos);
+
+        // The timeline is chronological even though child records were buffered and replayed.
+        const auto& events = c.events();
+        for (std::size_t i = 1; i < events.size(); ++i) {
+            QVERIFY(events[i - 1].timestamp <= events[i].timestamp);
+            QCOMPARE(events[i].seq, events[i - 1].seq + 1);
+        }
 
         QCOMPARE(c.limitEvents().size(), std::size_t{1});
         QCOMPARE(QString::fromStdString(c.limitEvents().front().limit), QStringLiteral("process-count"));

@@ -276,7 +276,7 @@ void ResultsView::populate()
         warnings += d.severity == Severity::Warning ? 1 : 0;
         errors += d.severity == Severity::Error ? 1 : 0;
     }
-    html += kv(tr("Diagnostics"), tr("%1 errors, %2 warnings (see Warnings && Limitations)").arg(errors).arg(warnings));
+    html += kv(tr("Diagnostics"), tr("%1 errors, %2 warnings (see Warnings &amp; Limitations)").arg(errors).arg(warnings));
     html += QStringLiteral("</table>");
     if (!r.execution.stdoutExcerpt.empty()) {
         html += tr("<h3>Captured stdout (untrusted)</h3><pre>%1</pre>").arg(esc(r.execution.stdoutExcerpt));

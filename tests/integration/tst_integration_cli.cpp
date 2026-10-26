@@ -4,9 +4,14 @@
 #include "core/reporting/ReportJson.hpp"
 #include "core/sandbox/Readiness.hpp"
 
+#include <QDir>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <algorithm>
 
 using namespace tracepot;
 namespace fs = std::filesystem;
@@ -118,6 +123,82 @@ private slots:
                              work_.path() + QStringLiteral("/timeout"), QStringLiteral("--quiet"), QStringLiteral("--no-html")});
         QCOMPARE(run.exitCode, 6);
         QVERIFY(run.out.contains(QStringLiteral("timeout")));
+    }
+
+    void killedCliLeavesNoSandboxBehind()
+    {
+        if (!ready_) {
+            QSKIP("sandbox/tracer not available on this host");
+        }
+        const QString script = QString::fromStdString(test::fixtureScript("sleep_long.sh").string());
+        QProcess process;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("XDG_CACHE_HOME"), work_.path() + QStringLiteral("/crash-cache"));
+        process.setProcessEnvironment(env);
+        process.start(QStringLiteral(TRACEPOT_CLI_PATH),
+                      {QStringLiteral("analyze"), script, QStringLiteral("--timeout"), QStringLiteral("120"),
+                       QStringLiteral("--output"), work_.path() + QStringLiteral("/crash"), QStringLiteral("--quiet")});
+        QVERIFY(process.waitForStarted());
+        // Matches every process whose command line mentions the sandboxed script: bubblewrap and
+        // the shell running inside the sandbox.
+        auto sandboxedPids = []() {
+            QList<int> pids;
+            for (const auto& entry : QDir(QStringLiteral("/proc")).entryList(QDir::Dirs)) {
+                bool numeric = false;
+                const int pid = entry.toInt(&numeric);
+                QFile cmdline(QStringLiteral("/proc/%1/cmdline").arg(entry));
+                if (numeric && cmdline.open(QIODevice::ReadOnly) &&
+                    cmdline.readAll().contains("/work/sleep_long.sh")) {
+                    QFile stat(QStringLiteral("/proc/%1/stat").arg(entry));
+                    if (stat.open(QIODevice::ReadOnly)) {
+                        const QByteArray content = stat.readAll();
+                        const int close = content.lastIndexOf(')');
+                        if (close > 0 && close + 2 < content.size() && content.at(close + 2) != 'Z') {
+                            pids << pid;
+                        }
+                    }
+                }
+            }
+            return pids;
+        };
+        // Kill as soon as bubblewrap appears: this deliberately hits the start-up window in which
+        // bubblewrap has not yet armed its own parent-death handling.
+        QTRY_VERIFY_WITH_TIMEOUT(!sandboxedPids().isEmpty(), 20000);
+        process.kill();  // SIGKILL: TracePot gets no chance to clean up
+        QVERIFY(process.waitForFinished(10000));
+        // PR_SET_PDEATHSIG (TracePot -> strace -> launcher/bwrap) and bubblewrap's
+        // --die-with-parent take the whole sandbox down.
+        QElapsedTimer waited;
+        waited.start();
+        while (!sandboxedPids().isEmpty() && waited.elapsed() < 10000) {
+            QTest::qWait(100);
+        }
+        if (!sandboxedPids().isEmpty()) {
+            QString survivors;
+            for (const int pid : sandboxedPids()) {
+                QFile stat(QStringLiteral("/proc/%1/stat").arg(pid));
+                stat.open(QIODevice::ReadOnly);
+                survivors += QString::fromUtf8(stat.readAll()) + QLatin1Char('\n');
+            }
+            QFAIL(qPrintable(QStringLiteral("sandbox processes survived:\n") + survivors));
+        }
+
+        // The abandoned workspace is unlocked and removed by the next analysis.
+        const QString runs = work_.path() + QStringLiteral("/crash-cache/tracepot/runs");
+        QCOMPARE(QDir(runs).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 1);
+        QProcess next;
+        next.setProcessEnvironment(env);
+        next.start(QStringLiteral(TRACEPOT_CLI_PATH),
+                   {QStringLiteral("analyze"), QString::fromStdString(test::fixtureScript("create_file.sh").string()),
+                    QStringLiteral("--output"), work_.path() + QStringLiteral("/crash"), QStringLiteral("--quiet"),
+                    QStringLiteral("--no-html")});
+        QVERIFY(next.waitForFinished(120000));
+        QCOMPARE(next.exitCode(), 0);
+        QVERIFY(QDir(runs).entryList(QDir::Dirs | QDir::NoDotAndDotDot).isEmpty());
+        auto report = loadReportFile(work_.path().toStdString() + "/crash/latest.json");
+        QVERIFY(report.ok());
+        QVERIFY(std::any_of(report->diagnostics.begin(), report->diagnostics.end(),
+                            [](const Diagnostic& d) { return d.code == "stale-workspaces"; }));
     }
 
     void invalidReport()

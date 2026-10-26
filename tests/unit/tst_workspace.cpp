@@ -4,7 +4,9 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 using namespace tracepot;
 namespace fs = std::filesystem;
@@ -92,6 +94,46 @@ private slots:
             QVERIFY(!fs::exists(runDir));
             QVERIFY(fs::exists(fs::path(outside.path().toStdString()) / "keep.txt"));  // symlink not followed
         }
+    }
+
+    void removesArbitrarilyDeepTrees()
+    {
+        QTemporaryDir base;
+        auto workspace = Workspace::create(base.path().toStdString(), "tracepot-test-deep");
+        QVERIFY(workspace.ok());
+        // Deeper than any fixed recursion/descriptor budget; built with *at() calls so the test
+        // itself does not hit PATH_MAX.
+        UniqueFd current(::open(workspace->paths().rootDir.c_str(), O_RDONLY | O_DIRECTORY));
+        for (int depth = 0; depth < 600; ++depth) {
+            QCOMPARE(::mkdirat(current.get(), "d", 0700), 0);
+            current.reset(::openat(current.get(), "d", O_RDONLY | O_DIRECTORY));
+            QVERIFY(current.valid());
+        }
+        QVERIFY(::close(::openat(current.get(), "leaf", O_WRONLY | O_CREAT, 0600)) == 0);
+        current.reset();
+        QVERIFY(workspace->remove().ok());
+        QVERIFY(fs::is_empty(base.path().toStdString()));
+    }
+
+    void removesOnlyStaleWorkspaces()
+    {
+        QTemporaryDir base;
+        const fs::path basePath = base.path().toStdString();
+        // Left behind by a killed analysis: unlocked lock file.
+        test::writeFile(basePath / "tracepot-stale" / ".lock", "");
+        test::writeFile(basePath / "tracepot-stale" / "root" / "work" / "x", "data");
+        // A live analysis holds its lock; a kept workspace is marked.
+        auto live = Workspace::create(basePath, "tracepot-live");
+        QVERIFY(live.ok());
+        auto kept = Workspace::create(basePath, "tracepot-kept");
+        kept->setKeep(true);
+        test::writeFile(basePath / "unrelated" / ".lock", "");
+
+        QCOMPARE(Workspace::removeStale(basePath), std::size_t{1});
+        QVERIFY(!fs::exists(basePath / "tracepot-stale"));
+        QVERIFY(fs::exists(live->paths().runDir));
+        QVERIFY(fs::exists(kept->paths().runDir));
+        QVERIFY(fs::exists(basePath / "unrelated"));
     }
 
     void destructorRemovesUnlessKept()

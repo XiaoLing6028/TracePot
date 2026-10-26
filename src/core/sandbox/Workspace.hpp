@@ -2,6 +2,7 @@
 
 #include "core/models/Result.hpp"
 #include "core/models/Types.hpp"
+#include "core/util/FileUtil.hpp"
 
 #include <filesystem>
 #include <string>
@@ -18,9 +19,15 @@ struct WorkspacePaths {
 };
 
 // Private per-analysis directory tree. Removed on destruction unless keep() was requested.
+// While a workspace exists, its owner holds an exclusive flock on <runDir>/.lock; a workspace
+// whose lock is free belongs to an analysis that ended abnormally (e.g. TracePot was killed).
 class Workspace {
 public:
     static Result<Workspace> create(const std::filesystem::path& base, const std::string& analysisId);
+
+    // Removes workspaces in `base` left behind by analyses that were killed (unlocked, not marked
+    // as kept). Returns the number of removed workspaces.
+    static std::size_t removeStale(const std::filesystem::path& base);
 
     Workspace(Workspace&& other) noexcept;
     Workspace& operator=(Workspace&& other) noexcept;
@@ -35,7 +42,8 @@ public:
     // machine-id, and home directories populated from /etc/skel.
     Status populateSandboxRoot(SandboxUser user);
 
-    void setKeep(bool keep) { keep_ = keep; }
+    // Kept workspaces are marked on disk so stale-workspace cleanup leaves them alone.
+    void setKeep(bool keep);
     [[nodiscard]] bool kept() const { return keep_; }
     Status remove();
 
@@ -43,6 +51,7 @@ private:
     explicit Workspace(WorkspacePaths paths) : paths_(std::move(paths)) {}
 
     WorkspacePaths paths_;
+    UniqueFd lock_;
     bool keep_ = false;
     bool removed_ = false;
 };
