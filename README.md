@@ -66,6 +66,7 @@ Build:
 | Toolchain | `gcc-c++ cmake ninja-build pkgconf` | `g++ cmake ninja-build pkg-config` |
 | Core libraries | `libarchive-devel openssl-devel libseccomp-devel json-devel` | `libarchive-dev libssl-dev libseccomp-dev nlohmann-json3-dev` |
 | GUI and tests | `qt6-qtbase-devel` | `qt6-base-dev` |
+| AppImage packaging | `qt6-qtwayland librsvg2-tools curl` | `qt6-wayland librsvg2-bin curl` |
 | Runtime tools | `bubblewrap strace` | `bubblewrap strace` |
 
 The Debian/Ubuntu package names were used for the verified build; the Fedora names are the
@@ -83,8 +84,42 @@ builds only the core and CLI (Qt is then only needed when `BUILD_TESTING=ON`).
 
 Build outputs are placed in `build/bin/`: `tracepot` (CLI), `tracepot-gui` (GUI) and
 `tracepot-limits` (an internal helper that must stay next to the executables, or be installed in
-`<prefix>/libexec/tracepot/`). `cmake --install build` installs all three plus the JSON schema and
-a desktop entry.
+`<prefix>/libexec/tracepot/`). `cmake --install build` installs all three plus the JSON schema, a
+desktop entry and an icon.
+
+## AppImage
+
+The x86_64 AppImage contains the GUI, the CLI, the `tracepot-limits` helper, Qt 6 (X11 and Wayland)
+and the core libraries (libarchive, OpenSSL, libseccomp):
+
+```sh
+chmod +x TracePot-0.1.0-x86_64.AppImage
+./TracePot-0.1.0-x86_64.AppImage                                # GUI
+./TracePot-0.1.0-x86_64.AppImage cli check                      # command-line interface
+./TracePot-0.1.0-x86_64.AppImage cli analyze ./installer.sh
+```
+
+A symlink named `tracepot` that points to the AppImage also starts the command-line interface
+(`ln -s ~/Applications/TracePot-0.1.0-x86_64.AppImage ~/.local/bin/tracepot`).
+
+Host requirements:
+
+- x86_64 Linux with glibc 2.38 or newer and libstdc++ from GCC 13.2 or newer, for example Fedora 39+,
+  Ubuntu 24.04+, Debian 13+, RHEL 10, Arch Linux or openSUSE Tumbleweed. Debian 12 and RHEL 9 are
+  too old.
+- `bwrap` and `strace` installed from the distribution, plus the kernel requirements described in
+  [Sandbox requirements](#sandbox-requirements). They are deliberately not bundled: the sandbox and
+  the tracer have to match the host kernel and its security policy (for example Ubuntu's AppArmor
+  profile for bwrap) and receive the distribution's security updates.
+- FUSE to mount the AppImage (`fusermount3` from the `fuse3` package, normally installed on desktop
+  systems). Without FUSE, run it with `--appimage-extract-and-run` or set
+  `APPIMAGE_EXTRACT_AND_RUN=1`.
+- For the GUI only: the libraries every desktop has (X11/xcb or the Wayland client library,
+  EGL/GLX through libglvnd, fontconfig, FreeType, HarfBuzz). The CLI needs none of them.
+
+AppImages do not install themselves: use an integration tool such as Gear Lever or
+AppImageLauncher to get a menu entry and icon. Building the AppImage is described in
+[docs/development.md](docs/development.md#appimage).
 
 ## Running the tests
 

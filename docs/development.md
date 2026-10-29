@@ -111,6 +111,54 @@ parser in `src/core/reporting/ReportJson.cpp`, and `schemas/tracepot-report-1.sc
 (`tst_report_json` checks that serializer and schema agree). Removing or changing the meaning of a
 field requires a new major version and a new schema file.
 
+## AppImage
+
+```sh
+packaging/appimage/build-appimage.sh
+```
+
+builds `build/appimage/TracePot-<version>-x86_64.AppImage` and a `.sha256` file next to it. It
+needs an x86_64 machine with the build dependencies and the "AppImage packaging" row of the
+[README's table](../README.md#requirements); FUSE is not needed. Set `QMAKE` if `qmake6` is not the
+Qt 6 installation to bundle.
+
+The script:
+
+1. downloads linuxdeploy, linuxdeploy-plugin-qt, appimagetool and the AppImage runtime into
+   `build/appimage-tools/`. The releases are pinned at the top of the script and verified by
+   SHA-256; to upgrade a tool, change its version and checksum together.
+2. configures a fresh `RelWithDebInfo` build without tests in `build/appimage/cmake` and installs it
+   with `DESTDIR` into `build/appimage/AppDir` (prefix `/usr`, so the helper lands in
+   `usr/libexec/tracepot/`).
+3. runs linuxdeploy with the Qt plugin, which bundles the libraries with `$ORIGIN`-relative
+   RUNPATHs and the xcb, Wayland (including xdg-shell and decorations) and offscreen platform
+   plugins. `packaging/appimage/AppRun` is the entry point: GUI by default, CLI for `cli ...` or
+   when invoked as `tracepot`.
+4. fails if a bundled ELF file has an unresolved dependency or a RUNPATH that is not relative to
+   `$ORIGIN`, or if the helper or a required Qt plugin is missing.
+5. creates the AppImage with appimagetool (zstd). `SOURCE_DATE_EPOCH` defaults to the time of the
+   last commit, so rebuilding a commit with the same toolchain gives a bit-identical file.
+
+Libraries linuxdeploy leaves to the host (glibc, libstdc++, GL/EGL, X11/xcb, fontconfig, FreeType,
+HarfBuzz, libwayland-client, ...) set the minimum host versions: built on Ubuntu 24.04, the
+AppImage needs glibc 2.38 and `GLIBCXX_3.4.32`. Supporting older hosts means building on an older
+distribution. bubblewrap and strace are never bundled.
+
+Without FUSE or a display, test with:
+
+```sh
+APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen build/appimage/TracePot-0.1.0-x86_64.AppImage --version
+APPIMAGE_EXTRACT_AND_RUN=1 build/appimage/TracePot-0.1.0-x86_64.AppImage cli check
+```
+
+The `AppImage` workflow (`.github/workflows/appimage.yml`) runs the script on Ubuntu 24.04 for
+`v*` tags and on manual dispatch, smoke-tests the result and keeps it as a workflow artifact
+(downloaded artifacts lose the executable bit). Releases are published manually.
+
+Not included yet: AppStream metadata, update information (zsync) and a signature. No GTK or
+xdg-desktop-portal platform theme is bundled, so Qt's own file dialog is used and selected inputs
+are always real host paths.
+
 ## Contribution workflow
 
 1. Create a branch, make focused changes with tests.

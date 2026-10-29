@@ -1,0 +1,49 @@
+name: AppImage
+
+# Builds the x86_64 AppImage and keeps it as a workflow artifact. Publishing a release stays a
+# manual step.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    name: Build x86_64 AppImage
+    # The build machine's glibc and libstdc++ are the minimum the AppImage needs on the host.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ cmake ninja-build pkg-config \
+            libarchive-dev libssl-dev libseccomp-dev nlohmann-json3-dev \
+            qt6-base-dev qt6-wayland librsvg2-bin
+
+      - name: Build AppImage
+        run: packaging/appimage/build-appimage.sh
+
+      - name: Smoke test
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          QT_QPA_PLATFORM: offscreen
+        working-directory: build/appimage
+        run: |
+          sha256sum --check TracePot-*-x86_64.AppImage.sha256
+          appimage=$(ls TracePot-*-x86_64.AppImage)
+          "./$appimage" cli version
+          "./$appimage" --version
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: TracePot-x86_64-AppImage
+          path: |
+            build/appimage/TracePot-*-x86_64.AppImage
+            build/appimage/TracePot-*-x86_64.AppImage.sha256
+          if-no-files-found: error
