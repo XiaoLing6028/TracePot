@@ -1,0 +1,23 @@
+#!/bin/sh
+# Entry point of the TracePot AppImage (linuxdeploy wraps it to run the Qt plugin's hook first).
+#
+#   TracePot-<version>-x86_64.AppImage [options] [input]   starts the GUI (tracepot-gui)
+#   TracePot-<version>-x86_64.AppImage cli <command> ...   runs the command-line interface (tracepot)
+#
+# The command-line interface also starts when the AppImage is invoked through a symlink or copy
+# named "tracepot". bubblewrap and strace are always used from the host; TracePot builds the
+# environment of the launcher chain and the sandbox from scratch, so nothing set here reaches the
+# analyzed sample.
+
+if [ -z "${APPDIR:-}" ]; then
+    APPDIR=$(dirname "$(readlink -f "$0")")
+fi
+
+if [ "$(basename "${ARGV0:-$0}")" = "tracepot" ]; then
+    exec "$APPDIR/usr/bin/tracepot" "$@"
+fi
+if [ "${1:-}" = "cli" ]; then
+    shift
+    exec "$APPDIR/usr/bin/tracepot" "$@"
+fi
+exec "$APPDIR/usr/bin/tracepot-gui" "$@"

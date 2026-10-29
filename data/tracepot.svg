@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TracePot application icon: a pot with traced events rising out of it. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22405f"/>
+      <stop offset="1" stop-color="#0e1c2b"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb347"/>
+      <stop offset="1" stop-color="#e8741c"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="52" fill="url(#background)"/>
+  <!-- Trace lines: one process forking into child processes. -->
+  <g fill="none" stroke="#4fe0c4" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 122 V58"/>
+    <path d="M128 104 L90 80 V64"/>
+    <path d="M128 92 L166 70 V58"/>
+  </g>
+  <g fill="#4fe0c4">
+    <circle cx="128" cy="48" r="14"/>
+    <circle cx="90" cy="56" r="13"/>
+    <circle cx="166" cy="48" r="13"/>
+  </g>
+  <!-- Handles. -->
+  <g fill="none" stroke="#c75e14" stroke-width="12" stroke-linecap="round">
+    <path d="M62 152 C38 152 38 184 64 184"/>
+    <path d="M194 152 C218 152 218 184 192 184"/>
+  </g>
+  <!-- Body and rim. -->
+  <path d="M60 140 H196 L186 196 C183 212 171 220 156 220 H100 C85 220 73 212 70 196 Z" fill="url(#body)"/>
+  <rect x="48" y="122" width="160" height="24" rx="12" fill="#ffd27f"/>
+  <rect x="84" y="166" width="88" height="10" rx="5" fill="#ffffff" fill-opacity="0.35"/>
+  <rect x="96" y="186" width="64" height="10" rx="5" fill="#ffffff" fill-opacity="0.25"/>
+</svg>

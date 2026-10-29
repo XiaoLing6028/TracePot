@@ -63,4 +63,5 @@ install(FILES schemas/tracepot-report-1.schema.json
 install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 if(TRACEPOT_BUILD_GUI)
     install(FILES data/tracepot.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES data/tracepot.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 endif()
